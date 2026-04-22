@@ -1,6 +1,7 @@
 variable "image_url" {
   type        = string
   description = "URL de l'image Docker sans le tag (ex: ghcr.io/user/repo)"
+  default = "ghcr.io/ludogernay/api-flask"
 }
 
 variable "image_tag" {
