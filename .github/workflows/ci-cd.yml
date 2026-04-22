@@ -119,7 +119,8 @@ jobs:
         run: |
           terraform plan \
             -input=false \
-            -var="image_url=ghcr.io/${{ github.repository }}:latest" \
+            -var="image_url=ghcr.io/${{ github.repository }}" \
+            -var="image_tag=latest"
             -var="app_name=flask-api-demo"
 
       - name: Terraform apply
@@ -128,5 +129,6 @@ jobs:
           terraform apply \
             -auto-approve \
             -input=false \
-            -var="image_url=ghcr.io/${{ github.repository }}:latest" \
+            -var="image_url=ghcr.io/${{ github.repository }}" \
+            -var="image_tag=latest"
             -var="app_name=flask-api-demo"

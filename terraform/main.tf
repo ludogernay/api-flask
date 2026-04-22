@@ -9,14 +9,8 @@ terraform {
   }
 }
 
-# Authentification via variables d'environnement :
-#   RENDER_API_KEY  → clé API Render
-#   RENDER_OWNER_ID → ID du compte Render (commence par usr- ou tea-)
 provider "render" {}
 
-# ─────────────────────────────────────────────────────────────
-# Service Web Render — déploiement depuis une image GHCR
-# ─────────────────────────────────────────────────────────────
 resource "render_web_service" "flask_api" {
   name   = var.app_name
   plan   = var.plan
@@ -25,19 +19,17 @@ resource "render_web_service" "flask_api" {
   runtime_source = {
     image = {
       image_url = var.image_url
+      tag       = var.image_tag
     }
   }
 
   env_vars = {
-    # Port sur lequel Flask écoute dans le conteneur
     PORT = {
       value = "5000"
     }
-    # Nom de l'application (pour logs ou config)
     APP_NAME = {
       value = var.app_name
     }
-    # Environnement d'exécution
     FLASK_ENV = {
       value = "production"
     }
