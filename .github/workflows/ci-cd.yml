@@ -1,0 +1,132 @@
+name: CI/CD Flask API
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. Tests d'intégration
+  # ─────────────────────────────────────────────
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installation des dépendances
+        run: pip install -r requirements.txt
+
+      - name: Démarrage de l'API Flask
+        run: python app.py &
+
+      - name: Attente démarrage Flask (3s)
+        run: sleep 3
+
+      - name: Exécution des tests pytest
+        run: pytest -v
+
+  # ─────────────────────────────────────────────
+  # 2. Build et publication Docker → GHCR
+  # ─────────────────────────────────────────────
+  docker:
+    name: 🐳 Build & Push GHCR
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_url: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Connexion à GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraction des métadonnées Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Build et push de l'image Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ─────────────────────────────────────────────
+  # 3. Déploiement Terraform → Render
+  # ─────────────────────────────────────────────
+  terraform:
+    name: 🚀 Deploy Terraform → Render
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -input=false \
+            -var="image_url=ghcr.io/${{ github.repository }}:latest" \
+            -var="app_name=flask-api-demo"
+
+      - name: Terraform apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false \
+            -var="image_url=ghcr.io/${{ github.repository }}:latest" \
+            -var="app_name=flask-api-demo"
